@@ -6,3 +6,6 @@ See [Lab Notebook](https://docs.google.com/document/d/1d5JhdnMPuMJjW2eQ5G-IpQSW2
 
 Each cell represents a graph of genes. The task we want to perform is node prediction for each cell  - predicting the gene expression value of a gene that does not have a value due to sc-RNASeq dropout. Features are expressions of other genes for each cell, where the set of other genes is either (1) genes considered first-degree neighbors in the gene network graph (2) all genes except target gene (3) a set of random genes of size N, where N is the number of first-degree neighbors the gene has in the gene network graph. If the gene network graph is a "good" graph, the first-degree neighbors should provide as much or more information than all the genes.  
 
+Initial code from Dutil et al and Bertin et al [Github](https://github.com/mila-iqia/gene-graph-conv), altered for the mouse genome, single-cell RNASeq data, and regression task. 
+
+Most up-to-date notebook is `notebooks/1.2_MLP_Week8_LN_Regression.ipynb`.
