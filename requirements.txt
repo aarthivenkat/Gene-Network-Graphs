@@ -1,0 +1,12 @@
+pytest
+h5py
+numpy
+pandas
+torch
+torchvision
+sklearn
+networkx
+academictorrents>=2.1.15
+matplotlib
+joblib
+cmapPy
