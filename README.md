@@ -9,7 +9,7 @@ Each cell represents a graph of genes. The task we want to perform is node predi
 2. All genes except target gene  
 3. A set of random genes of size N, where N is the number of first-degree neighbors the gene has in the gene network graph.  
 
-If the gene network graph is a "good" graph, the first-degree neighbors should provide as much or more information than all the genes.  
+If the gene network graph is a "good" graph, the first-degree neighbors should provide as much or more information than all the genes, and more information than the random set.  
 
 Initial code from Dutil et al and Bertin et al [Github](https://github.com/mila-iqia/gene-graph-conv), altered for the mouse genome, single-cell RNASeq data, and regression task. Primarily using `data/`, `models/`, and `notebooks/`.
 
