@@ -170,7 +170,7 @@ class Model_regression(nn.Module):
                  dropout=False, cuda=False, seed=0, adj=None, graph_name=None, aggregation=None, prepool_extralayers=0,
                  lr=0.0001, patience=10, agg_reduce=2, scheduler=False, metric=sklearn.metrics.mean_squared_error,
                  optimizer=torch.optim.Adam, weight_decay=0.0001, batch_size=10, train_valid_split=0.8, 
-                 evaluate_train=True, verbose=False, full_data_cuda=True):
+                 evaluate_train=True, verbose=True, full_data_cuda=True):
         self.name = name
         self.column_names = column_names
         self.num_layer = num_layer
@@ -250,8 +250,8 @@ class Model_regression(nn.Module):
 
                 targets = Variable(labels, requires_grad=False).view(-1, 1)
                 loss = criterion(y_pred, targets)
-                if self.verbose:
-                    print("  batch ({}/{})".format(i, x_train.shape[0]) + ", train loss:" + "{0:.4f}".format(loss))
+                #if self.verbose:
+                    #print("  batch ({}/{})".format(i, x_train.shape[0]) + ", train loss:" + "{0:.4f}".format(loss))
 
                 optimizer.zero_grad()
                 loss.backward()
