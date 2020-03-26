@@ -6,7 +6,7 @@ torch
 torchvision
 sklearn
 networkx
-academictorrents>=2.1.15
+academictorrents>=2.1.15  ((( only required to get TCGA and GTeX data )))
 matplotlib
 joblib
 cmapPy
