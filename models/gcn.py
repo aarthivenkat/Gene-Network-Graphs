@@ -16,7 +16,7 @@ from torch import nn
 from torch.autograd import Variable
 from scipy import sparse
 from models.utils import *
-from models.models import Model
+from models.models import Model, Model_regression
 from models.gcn_layers import *
 import scipy.sparse
 
