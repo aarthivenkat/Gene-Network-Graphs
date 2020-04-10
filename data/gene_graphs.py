@@ -348,7 +348,7 @@ class StringDBGraph(GeneInteractionGraph):
         # previously human
         # savefile = self.datastore + "/graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
         # currently mouse
-        savefile = self.datastore + "/graphs/stringdb_mouse_graph_" + self.graph_type + "_edges.adjlist"
+        savefile = "../data/graphs/stringdb_coex_mouse_graph_" + self.graph_type + "_edges.adjlist"
         
         if os.path.isfile(savefile):
             print(" loading from cache file" + savefile)
@@ -358,10 +358,10 @@ class StringDBGraph(GeneInteractionGraph):
             # previously human
             # self.proteinlinks = self.datastore + "/graphs/9606.protein.links.detailed.v11.0.txt"
             # currently mouse
-            self.proteinlinks = self.datastore + "/graphs/10090.protein.links.detailed.v11.0.txt.gz"
+            self.proteinlinks = "../data/graphs/10090.protein.links.detailed.v11.0.txt.gz"
             print(" ensp_to_ensg_map")
             # fixed ensp_to_hugo_map to ensp_to_ensg for mouse
-            ensmap = ensp_to_hugo_map(self.datastore)
+            ensmap = ensp_to_hugo_map()
             print(" reading self.proteinlinks")
             # previously not gzipped
             # currently unzipping
@@ -376,7 +376,8 @@ class StringDBGraph(GeneInteractionGraph):
             #            if edge[0][5:] in ensmap.keys() and edge[1][5:] in ensmap.keys()]
             # currently mouse (5 number ID 10090)
             edgelist = [[ensmap[edge[0][6:]], ensmap[edge[1][6:]]] for edge in edgelist
-                         if edge[0][6:] in ensmap.keys() and edge[1][6:] in ensmap.keys()]
+                         if edge[0][6:] in ensmap.keys() and edge[1][6:] in ensmap.keys()
+                         and edge[0][6:] != edge[1][6:]] # remove self edges
 
             print(" creating OrderedGraph")
             self.nx_graph = nx.OrderedGraph(edgelist)
