@@ -21,16 +21,17 @@ from models import GAT, SpGAT
 parser = argparse.ArgumentParser()
 parser.add_argument('--no-cuda', action='store_true', default=False, help='Disables CUDA training.')
 parser.add_argument('--fastmode', action='store_true', default=False, help='Validate during training pass.')
+# sparse not updated yet
 parser.add_argument('--sparse', action='store_true', default=False, help='GAT with sparse version or not.')
 parser.add_argument('--seed', type=int, default=72, help='Random seed.')
-parser.add_argument('--epochs', type=int, default=10000, help='Number of epochs to train.')
+parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train.')
 parser.add_argument('--lr', type=float, default=0.005, help='Initial learning rate.')
 parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay (L2 loss on parameters).')
-parser.add_argument('--hidden', type=int, default=8, help='Number of hidden units.')
+parser.add_argument('--hidden', type=int, default=1, help='Number of hidden units.')
 parser.add_argument('--nb_heads', type=int, default=8, help='Number of head attentions.')
 parser.add_argument('--dropout', type=float, default=0.6, help='Dropout rate (1 - keep probability).')
 parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
-parser.add_argument('--patience', type=int, default=100, help='Patience')
+parser.add_argument('--patience', type=int, default=10, help='Patience')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -42,21 +43,23 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
 # Load data
-adj, features, labels, idx_train, idx_val, idx_test = load_joshi_data()
+adj, features, labels, idx_train, idx_val, idx_test = load_joshi_data("Cd8a")
 
 # Model and optimizer
 if args.sparse:
     model = SpGAT(nfeat=features.shape[1], 
                 nhid=args.hidden, 
-                nclass=int(labels.max()) + 1, 
+                nclass=1, # regression
+                # nclass=int(labels.max()) + 1, 
                 dropout=args.dropout, 
                 nheads=args.nb_heads, 
                 alpha=args.alpha)
 else:
-    model = GAT(nfeat=features.shape[1], 
+    model = GAT(ncells = features.shape[0], #features is cells x gene x gene features
+                ngenes=features.shape[1], 
+                nfeat=features.shape[2],
                 nhid=args.hidden, 
                 nclass=1, # regression
-                # nclass=int(labels.max()) + 1, 
                 dropout=args.dropout, 
                 nheads=args.nb_heads, 
                 alpha=args.alpha)
@@ -75,16 +78,31 @@ if args.cuda:
 
 features, adj, labels = Variable(features), Variable(adj), Variable(labels)
 
+print ("*******")
+print ("features ", features.shape)
+print ("adjacency matrix ", adj.shape)
+print ("labels ", labels.shape)
+print ("*******")
 
 def train(epoch):
     t = time.time()
     model.train()
     optimizer.zero_grad()
     output = model(features, adj)
+
+    print ("***")
+    print ("output", output.shape)
+    print ("***")
+
+    print (output)
+    print (features)
     # loss_train = F.nll_loss(output[idx_train], labels[idx_train])
-    loss_train = F.smooth_l1_loss(output[idx_train], labels[idx_train])
+    loss_train = F.smooth_l1_loss(output[idx_train], labels[idx_train].float()).float()
+    print (output[idx_train].type())
+    print (labels[idx_train].type())
+    print (loss_train.type())
     # acc_train = accuracy(output[idx_train], labels[idx_train])
-    r2_train = sklearn.metrics.r2_score(labels[idx_train], output[idx_train])
+    r2_train = sklearn.metrics.r2_score(labels[idx_train].cpu(), output[idx_train].cpu().detach().numpy())
     loss_train.backward()
     optimizer.step()
 
@@ -95,17 +113,17 @@ def train(epoch):
         output = model(features, adj)
 
     # loss_val = F.nll_loss(output[idx_val], labels[idx_val])
-    loss_val = F.smooth_l1_loss(output[idx_val], labels[idx_val])
+    loss_val = F.smooth_l1_loss(output[idx_val], labels[idx_val].float()).float()
     # acc_val = accuracy(output[idx_val], labels[idx_val])
-    r2_val = sklearn.metrics.r2_score(labels[idx_val], output[idx_val])
+    r2_val = sklearn.metrics.r2_score(labels[idx_val].cpu(), output[idx_val].cpu().detach().numpy())
     
     print('Epoch: {:04d}'.format(epoch+1),
           'loss_train: {:.4f}'.format(loss_train.data.item()),
-          'r2_train: {:.4f}'.format(r2_train.data.item()),
+          'r2_train: {:.4f}'.format(r2_train),
           # 'acc_train: {:.4f}'.format(acc_train.data.item()),
           'loss_val: {:.4f}'.format(loss_val.data.item()),
           # 'acc_val: {:.4f}'.format(acc_val.data.item()),
-          'r2_val: {:.4f}'.format(r2_val.data.item()),
+          'r2_val: {:.4f}'.format(r2_val),
           'time: {:.4f}s'.format(time.time() - t))
 
     return loss_val.data.item()
@@ -115,13 +133,13 @@ def compute_test():
     model.eval()
     output = model(features, adj)
     # loss_test = F.nll_loss(output[idx_test], labels[idx_test])
-    loss_test = F.smooth_l1_loss(output[idx_test], labels[idx_test])
+    loss_test = F.smooth_l1_loss(output[idx_test], labels[idx_test].float()).float()
     # acc_test = accuracy(output[idx_test], labels[idx_test])
-    r2_test = sklearn.metrics.r2_score(labels[idx_test], output[idx_test])
+    r2_test = sklearn.metrics.r2_score(labels[idx_test].cpu(), output[idx_test].cpu().detach().numpy())
     print("Test set results:",
-          "loss= {:.4f}".format(loss_test.data[0]),
+          "loss= {:.4f}".format(loss_test.data.item()),
           # "accuracy= {:.4f}".format(acc_test.data[0]))
-          "accuracy= {:.4f}".format(r2_test.data[0]))
+          "r2_test= {:.4f}".format(r2_test))
 
 # Train model
 t_total = time.time()

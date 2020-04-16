@@ -18,41 +18,50 @@ def encode_onehot(labels):
     labels_onehot = np.array(list(map(classes_dict.get, labels)), dtype=np.int32)
     return labels_onehot
 
-def load_joshi_data():
+def load_joshi_data(gene):
     dataset = datasets.GeneDataset(name="Week_8_LN",
                    expr_path='../data/datastore/week8_ln_magic_expr.csv')
     dataset.load_data()
     label_df = dataset.df
-
-    G = StringDBGraph(graph_type='coexpression')
-    G = G.nx_graph.subgraph(dataset.df.columns)
-    dataset.df.drop(columns=[x for x  in dataset.df.columns if x not in G.nodes()], inplace=True)
-
-    adj = nx.adjacency_matrix(G, nodelist=dataset.df.columns)
-    adj = normalize_adj(adj + sp.eye(adj.shape[0]))
-
+    
     gene_symbol = mouse_ensg_to_symbol(datastore="../data") # ensembl to symbol
     ensembl = dict((v,k) for k,v in gene_symbol.items()) # symbol to ensembl
 
-    features = np.array(dataset.df)
-    labels = np.array(label_df[ensembl['Cd8a']])
+    G = StringDBGraph(graph_type='coexpression')
+    G = G.nx_graph.subgraph(dataset.df.columns)
+    ngenes = list(G.neighbors(ensembl['Cd8a']))
+    ngenes.append(ensembl['Cd8a'])
+    G = G.subgraph(ngenes)
+    
+    # save memory
+    dataset.df.drop(columns=[x for x in dataset.df.columns if x not in G.nodes()], inplace=True)
+
+    adj = nx.adjacency_matrix(G, nodelist=ngenes)
+    adj = normalize_adj(adj + sp.eye(adj.shape[0]))
+
+    features = dataset.df # samples x features
+    
+    labels = np.array(label_df[ensembl[gene]]) # get for one gene
 
     indices = list(range(labels.shape[0]))
     np.random.shuffle(indices)
-    idx_train = indices[:5000]
-    idx_val = indices[5000:8000]
-    idx_test = indices[8000:]
+    idx_train = indices[:500]
+    idx_val = indices[500:800]
+    idx_test = indices[800:]
     
-    adj = torch.FloatTensor(np.array(adj.todense()))
-    features = torch.FloatTensor(features)
-    labels = torch.LongTensor(labels)
-
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
+    
+    # for each cell, repeat same adjacency vector (row: Cd8a, column: first-degree neighbors of Cd8a)
+    adj = np.tile(np.array(adj.todense()[-1,:]), features.shape[0])
+    
+    adj = torch.FloatTensor(adj).view(features.shape[0], 1, features.shape[1]) 
+    features = torch.FloatTensor(np.array(features)).view(features.shape[0], features.shape[1], 1)
+    labels = torch.LongTensor(labels).view(labels.shape[0], 1)
 
     return adj, features, labels, idx_train, idx_val, idx_test
-
+    
 def normalize_adj(mx):
     """Row-normalize sparse matrix"""
     rowsum = np.array(mx.sum(1))
