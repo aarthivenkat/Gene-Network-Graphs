@@ -54,7 +54,7 @@ def ensg_to_hugo_map(datastore="./data"):
     return ensmap
 
 
-def ensp_to_hugo_map(datastore="./data"):
+def ensp_to_hugo_map(datastore="../data"):
     """
     You should download the file Homo_sapiens.GRCh38.95.gtf from :
     ftp://ftp.ensembl.org/pub/release-95/gtf/homo_sapiens/Homo_sapiens.GRCh38.95.gtf.gz
@@ -73,7 +73,7 @@ def ensp_to_hugo_map(datastore="./data"):
         # previously human
         # df = read_gtf(datastore + "/datastore/Homo_sapiens.GRCh38.95.gtf")
         # currently mouse (read_gtf can take gzipped or not gzipped)
-        df = read_gtf(datastore + "/datastore/Mus_musculus.GRCm38.95.gtf.gz")
+        df = read_gtf(datastore + "../datastore/Mus_musculus.GRCm38.95.gtf.gz")
         df = df[df['protein_id'] != ''][['gene_id', 'protein_id']].drop_duplicates()
         df.to_pickle(savefile)
 
