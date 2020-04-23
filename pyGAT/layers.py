@@ -20,7 +20,7 @@ class GraphAttentionLayer(nn.Module):
         self.concat = concat
 
         self.W = nn.Parameter(torch.zeros
-                              (size=(ncells, in_features, out_features)))
+                              (size=(in_features, out_features)))
         nn.init.xavier_uniform_(self.W.data, gain=1.414)
         
         self.a = nn.Parameter(torch.zeros(size=(ncells, 2*out_features)))
@@ -29,8 +29,12 @@ class GraphAttentionLayer(nn.Module):
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
     def forward(self, input, adj):
-        hW = torch.bmm(input.view(self.ncells, self.ngenes, self.in_features), self.W)
+        print ("h", input.shape)
+        print ("W", self.W.shape)
         
+        hW = torch.einsum("cnf,fg->cng", input, self.W)
+        
+        print ("hW", hW.shape)
         """
         a_input: Whi x Whj
         a_input = torch.cat([hW.repeat(1, N).view(N * N, -1), hW.repeat(N, 1)], dim=1).view(N, -1, 2 * self.out_features)
@@ -38,10 +42,10 @@ class GraphAttentionLayer(nn.Module):
         
         a_input = torch.cat([hW.repeat(1,1,self.ngenes).view(self.ncells, self.ngenes * self.ngenes, self.out_features), hW.repeat(1,self.ngenes,1)], dim=1).view(self.ncells, self.ngenes, self.ngenes, 2 * self.out_features)
         
-        print (a_input.shape)
-        print (self.a.shape)
+        print ("a_input", a_input.shape)
+        print ("self.a", self.a.shape)
         
-        e_input = np.matmul(a_input.eval(), self.a.eval())#.squeeze(3)
+        e_input = torch.einsum("ab,acdb->acd", (self.a, a_input))
         e_input = e_input[:, -1, :] # importance of all genes to last (Cd8a) 
         
         e = self.leakyrelu(e_input).view(self.ncells, 1, self.ngenes)

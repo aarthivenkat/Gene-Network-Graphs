@@ -22,7 +22,7 @@ def load_joshi_data(gene):
     dataset = datasets.GeneDataset(name="Week_8_LN",
                    expr_path='../data/datastore/week8_ln_magic_expr.csv')
     dataset.load_data()
-    label_df = dataset.df
+    label_df = dataset.df.copy()
     
     gene_symbol = mouse_ensg_to_symbol(datastore="../data") # ensembl to symbol
     ensembl = dict((v,k) for k,v in gene_symbol.items()) # symbol to ensembl
@@ -37,11 +37,11 @@ def load_joshi_data(gene):
     dataset.df.drop(columns=[x for x in dataset.df.columns if x not in G.nodes()], inplace=True)
 
     adj = nx.adjacency_matrix(G, nodelist=ngenes)
-    adj = normalize_adj(adj + sp.eye(adj.shape[0]))
+    # adj = normalize_adj(adj + sp.eye(adj.shape[0]))
 
     features = dataset.df # samples x features
     
-    labels = np.array(label_df[ensembl[gene]]) # get for one gene
+    labels = np.array(label_df[ensembl[gene]]).reshape(-1) # get for one gene
 
     indices = list(range(labels.shape[0]))
     np.random.shuffle(indices)
@@ -58,7 +58,7 @@ def load_joshi_data(gene):
     
     adj = torch.FloatTensor(adj).view(features.shape[0], 1, features.shape[1]) 
     features = torch.FloatTensor(np.array(features)).view(features.shape[0], features.shape[1], 1)
-    labels = torch.LongTensor(labels).view(labels.shape[0], 1)
+    labels = torch.FloatTensor(labels).view(labels.shape[0])
 
     return adj, features, labels, idx_train, idx_val, idx_test
     

@@ -24,7 +24,7 @@ parser.add_argument('--fastmode', action='store_true', default=False, help='Vali
 # sparse not updated yet
 parser.add_argument('--sparse', action='store_true', default=False, help='GAT with sparse version or not.')
 parser.add_argument('--seed', type=int, default=72, help='Random seed.')
-parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train.')
+parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train.')
 parser.add_argument('--lr', type=float, default=0.005, help='Initial learning rate.')
 parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay (L2 loss on parameters).')
 parser.add_argument('--hidden', type=int, default=1, help='Number of hidden units.')
@@ -88,19 +88,14 @@ def train(epoch):
     t = time.time()
     model.train()
     optimizer.zero_grad()
-    output = model(features, adj)
+    output = model(features, adj).reshape(-1)
 
     print ("***")
-    print ("output", output.shape)
+    print ("output", list(zip(output.cpu(), labels.cpu())))
     print ("***")
 
-    print (output)
-    print (features)
     # loss_train = F.nll_loss(output[idx_train], labels[idx_train])
     loss_train = F.smooth_l1_loss(output[idx_train], labels[idx_train].float()).float()
-    print (output[idx_train].type())
-    print (labels[idx_train].type())
-    print (loss_train.type())
     # acc_train = accuracy(output[idx_train], labels[idx_train])
     r2_train = sklearn.metrics.r2_score(labels[idx_train].cpu(), output[idx_train].cpu().detach().numpy())
     loss_train.backward()
@@ -110,7 +105,7 @@ def train(epoch):
         # Evaluate validation set performance separately,
         # deactivates dropout during validation run.
         model.eval()
-        output = model(features, adj)
+        output = model(features, adj).reshape(-1)
 
     # loss_val = F.nll_loss(output[idx_val], labels[idx_val])
     loss_val = F.smooth_l1_loss(output[idx_val], labels[idx_val].float()).float()
@@ -131,7 +126,7 @@ def train(epoch):
 
 def compute_test():
     model.eval()
-    output = model(features, adj)
+    output = model(features, adj).reshape(-1)
     # loss_test = F.nll_loss(output[idx_test], labels[idx_test])
     loss_test = F.smooth_l1_loss(output[idx_test], labels[idx_test].float()).float()
     # acc_test = accuracy(output[idx_test], labels[idx_test])
