@@ -25,13 +25,13 @@ parser.add_argument('--fastmode', action='store_true', default=False, help='Vali
 parser.add_argument('--sparse', action='store_true', default=False, help='GAT with sparse version or not.')
 parser.add_argument('--seed', type=int, default=72, help='Random seed.')
 parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train.')
-parser.add_argument('--lr', type=float, default=0.005, help='Initial learning rate.')
+parser.add_argument('--lr', type=float, default=0.01, help='Initial learning rate.')
 parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay (L2 loss on parameters).')
 parser.add_argument('--hidden', type=int, default=1, help='Number of hidden units.')
 parser.add_argument('--nb_heads', type=int, default=8, help='Number of head attentions.')
 parser.add_argument('--dropout', type=float, default=0.6, help='Dropout rate (1 - keep probability).')
 parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
-parser.add_argument('--patience', type=int, default=10, help='Patience')
+parser.add_argument('--patience', type=int, default=100, help='Patience')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -64,8 +64,8 @@ else:
                 nheads=args.nb_heads, 
                 alpha=args.alpha)
 optimizer = optim.Adam(model.parameters(), 
-                       lr=args.lr, 
-                       weight_decay=args.weight_decay)
+                       lr=args.lr) 
+                       # weight_decay=args.weight_decay)
 
 if args.cuda:
     model.cuda()
@@ -78,26 +78,27 @@ if args.cuda:
 
 features, adj, labels = Variable(features), Variable(adj), Variable(labels)
 
-print ("*******")
-print ("features ", features.shape)
-print ("adjacency matrix ", adj.shape)
-print ("labels ", labels.shape)
-print ("*******")
+def loss_fn(output, labels, attention, lam):
+    reconstruction = F.smooth_l1_loss(output, labels.float()).float()
+    sparsity = lam * (torch.norm(attention, 0) / labels.shape[0])
+    reg = 0.
+    for param in model.parameters():
+        reg += torch.norm(param, 0)
+
+    return (reconstruction + sparsity)
+    # return (reconstruction + reg)  
 
 def train(epoch):
     t = time.time()
     model.train()
     optimizer.zero_grad()
-    output = model(features, adj).reshape(-1)
+    output, attention = model(features, adj)
+    
+    output = output.reshape(-1)
 
-    print ("***")
-    print ("output", list(zip(output.cpu(), labels.cpu())))
-    print ("***")
-
-    # loss_train = F.nll_loss(output[idx_train], labels[idx_train])
-    loss_train = F.smooth_l1_loss(output[idx_train], labels[idx_train].float()).float()
-    # acc_train = accuracy(output[idx_train], labels[idx_train])
+    loss_train = loss_fn(output[idx_train], labels[idx_train], attention[idx_train], 0.05)
     r2_train = sklearn.metrics.r2_score(labels[idx_train].cpu(), output[idx_train].cpu().detach().numpy())
+    l0_norm_att_train = torch.norm(attention[idx_train], 0) / len(idx_train)
     loss_train.backward()
     optimizer.step()
 
@@ -105,36 +106,37 @@ def train(epoch):
         # Evaluate validation set performance separately,
         # deactivates dropout during validation run.
         model.eval()
-        output = model(features, adj).reshape(-1)
+        output, attention = model(features, adj)
+        output = output.reshape(-1)
 
-    # loss_val = F.nll_loss(output[idx_val], labels[idx_val])
-    loss_val = F.smooth_l1_loss(output[idx_val], labels[idx_val].float()).float()
-    # acc_val = accuracy(output[idx_val], labels[idx_val])
+    loss_val = loss_fn(output[idx_val], labels[idx_val], attention[idx_val], 0.05)
     r2_val = sklearn.metrics.r2_score(labels[idx_val].cpu(), output[idx_val].cpu().detach().numpy())
-    
+    l0_norm_att_val = torch.norm(attention[idx_val], 0) / len(idx_val)
+
     print('Epoch: {:04d}'.format(epoch+1),
           'loss_train: {:.4f}'.format(loss_train.data.item()),
           'r2_train: {:.4f}'.format(r2_train),
-          # 'acc_train: {:.4f}'.format(acc_train.data.item()),
+          'l0_norm_att_train: {:.4f}'.format(l0_norm_att_train),
           'loss_val: {:.4f}'.format(loss_val.data.item()),
-          # 'acc_val: {:.4f}'.format(acc_val.data.item()),
           'r2_val: {:.4f}'.format(r2_val),
+          'l0_norm_att_val: {:.4f}'.format(l0_norm_att_val),       
           'time: {:.4f}s'.format(time.time() - t))
 
     return loss_val.data.item()
 
-
 def compute_test():
     model.eval()
-    output = model(features, adj).reshape(-1)
-    # loss_test = F.nll_loss(output[idx_test], labels[idx_test])
-    loss_test = F.smooth_l1_loss(output[idx_test], labels[idx_test].float()).float()
-    # acc_test = accuracy(output[idx_test], labels[idx_test])
+    output, attention = model(features, adj)
+
+    output = output.reshape(-1)
+    loss_test = loss_fn(output[idx_test], labels[idx_test], attention, 0.01)
     r2_test = sklearn.metrics.r2_score(labels[idx_test].cpu(), output[idx_test].cpu().detach().numpy())
+    l0_norm_att_test = torch.norm(attention[idx_test], 0) / len(idx_test)
+
     print("Test set results:",
           "loss= {:.4f}".format(loss_test.data.item()),
-          # "accuracy= {:.4f}".format(acc_test.data[0]))
-          "r2_test= {:.4f}".format(r2_test))
+          "r2_test= {:.4f}".format(r2_test),
+          "l0_norm_att_test: {}".format(l0_norm_att_test))
 
 # Train model
 t_total = time.time()

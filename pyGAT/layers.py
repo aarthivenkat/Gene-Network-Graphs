@@ -28,22 +28,17 @@ class GraphAttentionLayer(nn.Module):
 
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
+        self.Z = nn.Parameter(torch.zeros(size=(ncells,1,ngenes)))
+        nn.init.uniform(self.Z)
+
     def forward(self, input, adj):
-        print ("h", input.shape)
-        print ("W", self.W.shape)
-        
         hW = torch.einsum("cnf,fg->cng", input, self.W)
         
-        print ("hW", hW.shape)
         """
         a_input: Whi x Whj
         a_input = torch.cat([hW.repeat(1, N).view(N * N, -1), hW.repeat(N, 1)], dim=1).view(N, -1, 2 * self.out_features)
         """
-        
         a_input = torch.cat([hW.repeat(1,1,self.ngenes).view(self.ncells, self.ngenes * self.ngenes, self.out_features), hW.repeat(1,self.ngenes,1)], dim=1).view(self.ncells, self.ngenes, self.ngenes, 2 * self.out_features)
-        
-        print ("a_input", a_input.shape)
-        print ("self.a", self.a.shape)
         
         e_input = torch.einsum("ab,acdb->acd", (self.a, a_input))
         e_input = e_input[:, -1, :] # importance of all genes to last (Cd8a) 
@@ -51,14 +46,16 @@ class GraphAttentionLayer(nn.Module):
         e = self.leakyrelu(e_input).view(self.ncells, 1, self.ngenes)
         
         zero_vec = -9e15*torch.ones_like(e)
-        
-        attention = torch.where(adj > 0, e, zero_vec) # keep all but attention on self
-        attention = F.softmax(attention, dim=1)
-        attention = F.dropout(attention, self.dropout, training=self.training)
-        
-        h_prime = torch.bmm(attention.view(self.ncells, 1, self.ngenes), hW.view(self.ncells, self.ngenes, self.out_features))
 
-        return (h_prime)
+        attention = torch.where(adj > 0, e, zero_vec) # keep all but attention on self
+        
+        # attention = F.dropout(attention, self.dropout, training=self.training)
+        attention = torch.where(self.Z > 0.5, attention, zero_vec)
+        
+        attention = F.softmax(attention, dim=2)
+        h_prime = torch.bmm(attention.view(self.ncells, 1, self.ngenes), hW.view(self.ncells, self.ngenes, self.out_features))
+       
+        return (h_prime, attention)
         """
         if self.concat:
              return F.elu(h_prime)

@@ -57,6 +57,7 @@ def load_joshi_data(gene):
     adj = np.tile(np.array(adj.todense()[-1,:]), features.shape[0])
     
     adj = torch.FloatTensor(adj).view(features.shape[0], 1, features.shape[1]) 
+
     features = torch.FloatTensor(np.array(features)).view(features.shape[0], features.shape[1], 1)
     labels = torch.FloatTensor(labels).view(labels.shape[0])
 

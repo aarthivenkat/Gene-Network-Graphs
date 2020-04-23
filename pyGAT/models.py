@@ -9,7 +9,7 @@ class GAT(nn.Module):
         """Dense version of GAT."""
         super(GAT, self).__init__()
         self.dropout = dropout
-
+        
         self.out_att = GraphAttentionLayer(ncells, ngenes, nfeat, nhid, dropout=dropout, alpha=alpha, concat=True)
 
     def forward(self, x, adj):
@@ -30,9 +30,7 @@ class GAT_multihead(nn.Module):
 
     def forward(self, x, adj):
         x = F.dropout(x, self.dropout, training=self.training)
-        print ("pre cat", x.shape)
         x = torch.cat([att(x, adj) for att in self.attentions], dim=1)
-        print ("post cat", x.shape)
         x = F.dropout(x, self.dropout, training=self.training)
         
         return (self.out_att(x, adj))
