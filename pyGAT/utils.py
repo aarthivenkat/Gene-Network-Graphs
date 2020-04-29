@@ -18,6 +18,48 @@ def encode_onehot(labels):
     labels_onehot = np.array(list(map(classes_dict.get, labels)), dtype=np.int32)
     return labels_onehot
 
+def load_synthetic_data(gene):
+    dataset = datasets.SyntheticDataset(name='CD8_count_synthetic', expr_path='../../project/CD8_T_count.csv',label_path='../../project/CD8_T_label.csv')
+    dataset.load_data()
+
+    gene_symbol = mouse_ensg_to_symbol(datastore="../data") # ensembl to symbol
+    ensembl = dict((v,k) for k,v in gene_symbol.items()) # symbol to ensembl
+    cols = set(dataset.df.columns).intersection(set(ensembl.keys()))
+    
+    G = StringDBGraph(graph_type='all')
+    G = G.nx_graph.subgraph([ensembl[x] for x in cols])
+    ngenes = list(G.neighbors(ensembl['Cd8a']))
+    ngenes.append(ensembl['Cd8a'])
+    G = G.subgraph(ngenes)
+
+    # save memory
+    dataset.df = dataset.df[cols].drop(columns=[x for x in cols if x not in [gene_symbol[y] for y in G.nodes()]])
+    adj = nx.adjacency_matrix(G, nodelist=ngenes)
+    # adj = normalize_adj(adj + sp.eye(adj.shape[0]))
+
+    features = dataset.df # samples x features
+    
+    labels = np.array(dataset.labels).reshape(-1) # get for one gene
+
+    indices = list(range(labels.shape[0]))
+    np.random.shuffle(indices)
+    idx_train = indices
+    idx_val = indices
+    idx_test = indices
+    
+    idx_train = torch.LongTensor(idx_train)
+    idx_val = torch.LongTensor(idx_val)
+    idx_test = torch.LongTensor(idx_test)
+    
+    # for each cell, repeat same adjacency vector (row: Cd8a, column: first-degree neighbors of Cd8a)
+    adj = np.tile(np.array(adj.todense()[-1,:]), features.shape[0])
+    adj = torch.FloatTensor(adj).view(features.shape[0], 1, features.shape[1]) 
+
+    features = torch.FloatTensor(np.array(features)).view(features.shape[0], features.shape[1], 1)
+    labels = torch.FloatTensor(labels).view(labels.shape[0])
+
+    return adj, features, labels, idx_train, idx_val, idx_test
+
 def load_joshi_data(gene):
     dataset = datasets.GeneDataset(name="Week_8_LN",
                    expr_path='../data/datastore/week8_ln_magic_expr.csv')
@@ -27,7 +69,8 @@ def load_joshi_data(gene):
     gene_symbol = mouse_ensg_to_symbol(datastore="../data") # ensembl to symbol
     ensembl = dict((v,k) for k,v in gene_symbol.items()) # symbol to ensembl
 
-    G = StringDBGraph(graph_type='coexpression')
+    # G = StringDBGraph(graph_type='coexpression')
+    G = StringDBGraph(graph_type='all')
     G = G.nx_graph.subgraph(dataset.df.columns)
     ngenes = list(G.neighbors(ensembl['Cd8a']))
     ngenes.append(ensembl['Cd8a'])
@@ -45,9 +88,9 @@ def load_joshi_data(gene):
 
     indices = list(range(labels.shape[0]))
     np.random.shuffle(indices)
-    idx_train = indices[:500]
-    idx_val = indices[500:800]
-    idx_test = indices[800:]
+    idx_train = indices[:800]
+    idx_val = indices[800:1200]
+    idx_test = indices[1200:]
     
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)

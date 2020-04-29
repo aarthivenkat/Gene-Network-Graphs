@@ -28,10 +28,11 @@ class GraphAttentionLayer(nn.Module):
 
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
-        self.Z = nn.Parameter(torch.zeros(size=(ncells,1,ngenes)))
-        nn.init.uniform(self.Z)
+        # self.Z = nn.Parameter(torch.zeros(size=(ncells,1,ngenes)))
+        # nn.init.normal_(self.Z, mean=0, std=1)
 
     def forward(self, input, adj):
+    
         hW = torch.einsum("cnf,fg->cng", input, self.W)
         
         """
@@ -49,10 +50,11 @@ class GraphAttentionLayer(nn.Module):
 
         attention = torch.where(adj > 0, e, zero_vec) # keep all but attention on self
         
-        # attention = F.dropout(attention, self.dropout, training=self.training)
-        attention = torch.where(self.Z > 0.5, attention, zero_vec)
+        attention = F.dropout(attention, self.dropout, training=self.training)
+        # attention = torch.where(self.Z > 0.5, attention, zero_vec)
         
         attention = F.softmax(attention, dim=2)
+
         h_prime = torch.bmm(attention.view(self.ncells, 1, self.ngenes), hW.view(self.ncells, self.ngenes, self.out_features))
        
         return (h_prime, attention)

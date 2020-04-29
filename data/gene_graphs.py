@@ -348,8 +348,11 @@ class StringDBGraph(GeneInteractionGraph):
         # previously human
         # savefile = self.datastore + "/graphs/stringdb_graph_" + self.graph_type + "_edges.adjlist"
         # currently mouse
-        savefile = "../data/graphs/stringdb_coex_mouse_graph_" + self.graph_type + "_edges.adjlist"
-        
+        if self.graph_type == 'all':
+            savefile = "../data/graphs/stringdb_all_mouse_graph_edges.adjlist" 
+        else:
+            savefile = "../data/graphs/stringdb_coex_mouse_graph_" + self.graph_type + "_edges.adjlist"
+  
         if os.path.isfile(savefile):
             print(" loading from cache file" + savefile)
             self.nx_graph = nx.read_adjlist(savefile)

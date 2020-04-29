@@ -12,6 +12,26 @@ from torch.utils.data import Dataset
 import data.utils
 from data.utils import symbol_map, ensg_to_hugo_map
 
+class SyntheticDataset(Dataset):
+    def __init__(self, name, expr_path, label_path):
+        self.name = name
+        self.expr_path = expr_path
+        self.label_path = label_path
+        super(SyntheticDataset, self).__init__()
+
+    def load_data(self):
+        # Load expression file, samples as rows and genes/label names as columns
+        separators = {'.tsv' : '\t', '.txt': '\t', '.csv': ','}
+        sep = data.utils.get_file_separator(self.expr_path)
+        self.df = pd.read_csv(self.expr_path, sep=sep, index_col=0, header=None).T
+        self.labeldf = pd.read_csv(self.label_path, sep=sep, index_col=0, header=None).T
+        
+        self.sample_names = self.df.index.values
+        self.node_names = self.df.columns.values
+        self.nb_nodes = self.df.shape[1]
+        self.data = self.df.values
+        self.labels = self.labeldf['Cd8a']
+
 class GeneDataset(Dataset):
     def __init__(self, name, expr_path='/home/aarthivenkat/gene-graph-conv/data/datastore/week8_ln_magic_expr.csv'):
         self.name = name

@@ -14,7 +14,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 import sklearn.metrics
 
-from utils import load_joshi_data#, accuracy
+from utils import load_joshi_data, load_synthetic_data
 from models import GAT, SpGAT
 
 # Training settings
@@ -25,11 +25,11 @@ parser.add_argument('--fastmode', action='store_true', default=False, help='Vali
 parser.add_argument('--sparse', action='store_true', default=False, help='GAT with sparse version or not.')
 parser.add_argument('--seed', type=int, default=72, help='Random seed.')
 parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train.')
-parser.add_argument('--lr', type=float, default=0.01, help='Initial learning rate.')
+parser.add_argument('--lr', type=float, default=0.1, help='Initial learning rate.')
 parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay (L2 loss on parameters).')
 parser.add_argument('--hidden', type=int, default=1, help='Number of hidden units.')
 parser.add_argument('--nb_heads', type=int, default=8, help='Number of head attentions.')
-parser.add_argument('--dropout', type=float, default=0.6, help='Dropout rate (1 - keep probability).')
+parser.add_argument('--dropout', type=float, default=0.9, help='Dropout rate (1 - keep probability).')
 parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
 parser.add_argument('--patience', type=int, default=100, help='Patience')
 
@@ -80,13 +80,13 @@ features, adj, labels = Variable(features), Variable(adj), Variable(labels)
 
 def loss_fn(output, labels, attention, lam):
     reconstruction = F.smooth_l1_loss(output, labels.float()).float()
-    sparsity = lam * (torch.norm(attention, 0) / labels.shape[0])
+    sparsity = lam * (torch.norm(attention, 1) / labels.shape[0])
     reg = 0.
     for param in model.parameters():
-        reg += torch.norm(param, 0)
+        reg += lam * (torch.norm(param, 1) / labels.shape[0])
 
-    return (reconstruction + sparsity)
-    # return (reconstruction + reg)  
+    # return (reconstruction + sparsity)
+    return (reconstruction + reg)
 
 def train(epoch):
     t = time.time()
@@ -96,7 +96,7 @@ def train(epoch):
     
     output = output.reshape(-1)
 
-    loss_train = loss_fn(output[idx_train], labels[idx_train], attention[idx_train], 0.05)
+    loss_train = loss_fn(output[idx_train], labels[idx_train], attention[idx_train], 0.25)
     r2_train = sklearn.metrics.r2_score(labels[idx_train].cpu(), output[idx_train].cpu().detach().numpy())
     l0_norm_att_train = torch.norm(attention[idx_train], 0) / len(idx_train)
     loss_train.backward()
@@ -109,7 +109,7 @@ def train(epoch):
         output, attention = model(features, adj)
         output = output.reshape(-1)
 
-    loss_val = loss_fn(output[idx_val], labels[idx_val], attention[idx_val], 0.05)
+    loss_val = loss_fn(output[idx_val], labels[idx_val], attention[idx_val], 0.25)
     r2_val = sklearn.metrics.r2_score(labels[idx_val].cpu(), output[idx_val].cpu().detach().numpy())
     l0_norm_att_val = torch.norm(attention[idx_val], 0) / len(idx_val)
 
@@ -129,7 +129,7 @@ def compute_test():
     output, attention = model(features, adj)
 
     output = output.reshape(-1)
-    loss_test = loss_fn(output[idx_test], labels[idx_test], attention, 0.01)
+    loss_test = loss_fn(output[idx_test], labels[idx_test], attention, 0.25)
     r2_test = sklearn.metrics.r2_score(labels[idx_test].cpu(), output[idx_test].cpu().detach().numpy())
     l0_norm_att_test = torch.norm(attention[idx_test], 0) / len(idx_test)
 
