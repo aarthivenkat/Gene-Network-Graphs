@@ -28,63 +28,63 @@ def load_synthetic_data(gene):
     
     G = StringDBGraph(graph_type='all')
     G = G.nx_graph.subgraph([ensembl[x] for x in cols])
-    ngenes = list(G.neighbors(ensembl['Cd8a']))
-    ngenes.append(ensembl['Cd8a'])
+    ngenes = list(G.neighbors(ensembl[gene]))
+    ngenes.append(ensembl[gene])
     G = G.subgraph(ngenes)
 
     # save memory
     dataset.df = dataset.df[cols].drop(columns=[x for x in cols if x not in [gene_symbol[y] for y in G.nodes()]])
+    dataset.df = dataset.df[[gene_symbol[x] for x in list(ngenes)]]
     adj = nx.adjacency_matrix(G, nodelist=ngenes)
-    # adj = normalize_adj(adj + sp.eye(adj.shape[0]))
 
     features = dataset.df # samples x features
-    
     labels = np.array(dataset.labels).reshape(-1) # get for one gene
 
     indices = list(range(labels.shape[0]))
     np.random.shuffle(indices)
-    idx_train = indices
-    idx_val = indices
-    idx_test = indices
+    idx_train = indices[:500]
+    idx_val = indices[500:700]
+    idx_test = indices[700:]
     
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
     
-    # for each cell, repeat same adjacency vector (row: Cd8a, column: first-degree neighbors of Cd8a)
+    # for each cell, repeat same adjacency vector (row: mygene, column: first-degree neighbors of mygene)
     adj = np.tile(np.array(adj.todense()[-1,:]), features.shape[0])
     adj = torch.FloatTensor(adj).view(features.shape[0], 1, features.shape[1]) 
 
     features = torch.FloatTensor(np.array(features)).view(features.shape[0], features.shape[1], 1)
     labels = torch.FloatTensor(labels).view(labels.shape[0])
 
-    return adj, features, labels, idx_train, idx_val, idx_test
+    return adj, features, labels, idx_train, idx_val, idx_test, dataset.df.columns
 
 def load_joshi_data(gene):
     dataset = datasets.GeneDataset(name="Week_8_LN",
-                   expr_path='../data/datastore/week8_ln_magic_expr.csv')
-    dataset.load_data()
-    label_df = dataset.df.copy()
+                   expr_path='../data/datastore/week8_ln_raw_expr.csv')
     
+    label_dataset = datasets.GeneDataset(name="Week_8_LN",
+                   expr_path='../data/datastore/week8_ln_magic_expr.csv')
+    
+    dataset.load_data()
+    label_dataset.load_data()
     gene_symbol = mouse_ensg_to_symbol(datastore="../data") # ensembl to symbol
     ensembl = dict((v,k) for k,v in gene_symbol.items()) # symbol to ensembl
 
     # G = StringDBGraph(graph_type='coexpression')
     G = StringDBGraph(graph_type='all')
     G = G.nx_graph.subgraph(dataset.df.columns)
-    ngenes = list(G.neighbors(ensembl['Cd8a']))
-    ngenes.append(ensembl['Cd8a'])
+    ngenes = list(G.neighbors(ensembl[gene]))
+    ngenes.append(ensembl[gene])
     G = G.subgraph(ngenes)
     
     # save memory
     dataset.df.drop(columns=[x for x in dataset.df.columns if x not in G.nodes()], inplace=True)
-
+    dataset.df = dataset.df[list(ngenes)]
     adj = nx.adjacency_matrix(G, nodelist=ngenes)
-    # adj = normalize_adj(adj + sp.eye(adj.shape[0]))
 
     features = dataset.df # samples x features
-    
-    labels = np.array(label_df[ensembl[gene]]).reshape(-1) # get for one gene
+    labels = np.array(label_dataset.df[ensembl[gene]]).reshape(-1) # get for one gene
 
     indices = list(range(labels.shape[0]))
     np.random.shuffle(indices)
@@ -96,15 +96,14 @@ def load_joshi_data(gene):
     idx_val = torch.LongTensor(idx_val)
     idx_test = torch.LongTensor(idx_test)
     
-    # for each cell, repeat same adjacency vector (row: Cd8a, column: first-degree neighbors of Cd8a)
+    # for each cell, repeat same adjacency vector (row: mygene, column: first-degree neighbors of mygene)
     adj = np.tile(np.array(adj.todense()[-1,:]), features.shape[0])
-    
     adj = torch.FloatTensor(adj).view(features.shape[0], 1, features.shape[1]) 
 
     features = torch.FloatTensor(np.array(features)).view(features.shape[0], features.shape[1], 1)
     labels = torch.FloatTensor(labels).view(labels.shape[0])
 
-    return adj, features, labels, idx_train, idx_val, idx_test
+    return adj, features, labels, idx_train, idx_val, idx_test, dataset.df.columns
     
 def normalize_adj(mx):
     """Row-normalize sparse matrix"""

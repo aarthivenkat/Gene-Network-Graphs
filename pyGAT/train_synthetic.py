@@ -25,16 +25,22 @@ parser.add_argument('--fastmode', action='store_true', default=False, help='Vali
 parser.add_argument('--sparse', action='store_true', default=False, help='GAT with sparse version or not.')
 parser.add_argument('--seed', type=int, default=72, help='Random seed.')
 parser.add_argument('--epochs', type=int, default=1000, help='Number of epochs to train.')
-parser.add_argument('--lr', type=float, default=0.5, help='Initial learning rate.')
+parser.add_argument('--lr', type=float, default=0.1, help='Initial learning rate.')
 parser.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay (L2 loss on parameters).')
 parser.add_argument('--hidden', type=int, default=1, help='Number of hidden units.')
 parser.add_argument('--nb_heads', type=int, default=8, help='Number of head attentions.')
-parser.add_argument('--dropout', type=float, default=0.9, help='Dropout rate (1 - keep probability).')
+parser.add_argument('--dropout', type=float, default=0.5, help='Dropout rate (1 - keep probability).')
 parser.add_argument('--alpha', type=float, default=0.2, help='Alpha for the leaky_relu.')
-parser.add_argument('--patience', type=int, default=100, help='Patience')
+parser.add_argument('--patience', type=int, default=50, help='Patience')
+parser.add_argument('--lam', type=float, default=0.1, help='Lambda for Attention L1 Regularization')
+parser.add_argument('--gene', type=str, default='Cd8a', help='Gene for imputation task')
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
+
+filedir = "./synthetic_results/" + args.gene.lower() + "/" + str(args.lam) + "." + str(args.lr) + "." + str(args.patience)
+print ("*****\n" + filedir + "\n*****\n")
+os.mkdir(filedir)
 
 random.seed(args.seed)
 np.random.seed(args.seed)
@@ -43,17 +49,13 @@ if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
 # Load data
-adj, features, labels, idx_train, idx_val, idx_test = load_synthetic_data("Cd8a")
-print ("adj", adj.shape)
-print("features", features.shape)
-print ("labels", labels.shape)
+adj, features, labels, idx_train, idx_val, idx_test, neighbor_genes = load_synthetic_data(args.gene)
 
 # Model and optimizer
 if args.sparse:
     model = SpGAT(nfeat=features.shape[1], 
                 nhid=args.hidden, 
                 nclass=1, # regression
-                # nclass=int(labels.max()) + 1, 
                 dropout=args.dropout, 
                 nheads=args.nb_heads, 
                 alpha=args.alpha)
@@ -67,8 +69,8 @@ else:
                 nheads=args.nb_heads, 
                 alpha=args.alpha)
 optimizer = optim.Adam(model.parameters(), 
-                       lr=args.lr) 
-                       # weight_decay=args.weight_decay)
+                       lr=args.lr)#, 
+                       #weight_decay=args.weight_decay)
 
 if args.cuda:
     model.cuda()
@@ -83,14 +85,11 @@ features, adj, labels = Variable(features), Variable(adj), Variable(labels)
 
 def loss_fn(output, labels, attention, lam):
     reconstruction = F.smooth_l1_loss(output, labels.float()).float()
-    sparsity = lam * (torch.norm(attention, 1) / labels.shape[0])
-    reg = 0.
-    for param in model.parameters():
-        reg += lam * (torch.norm(param, 1) / labels.shape[0])
 
-    # return (reconstruction + sparsity)
-    return (reconstruction + reg)  
+    # TODO impose sparsity with attention and lam
 
+    return (reconstruction)
+ 
 def train(epoch):
     t = time.time()
     model.train()
@@ -99,9 +98,10 @@ def train(epoch):
     
     output = output.reshape(-1)
 
-    loss_train = loss_fn(output[idx_train], labels[idx_train], attention[idx_train], 0.25)
+    loss_train = loss_fn(output[idx_train], labels[idx_train], attention[idx_train], args.lam)
     r2_train = sklearn.metrics.r2_score(labels[idx_train].cpu(), output[idx_train].cpu().detach().numpy())
-    l0_norm_att_train = torch.norm(attention[idx_train], 0) / len(idx_train)
+    l0_norm_att_train = sum(~np.isclose(attention[idx_train][0].cpu().detach().numpy().flatten(), np.zeros((attention.cpu().detach().numpy().shape[1])), atol=0.0015))
+    torch.norm(attention[idx_train], 0) / len(idx_train)
     loss_train.backward()
     optimizer.step()
 
@@ -112,9 +112,9 @@ def train(epoch):
         output, attention = model(features, adj)
         output = output.reshape(-1)
 
-    loss_val = loss_fn(output[idx_val], labels[idx_val], attention[idx_val], 0.25)
+    loss_val = loss_fn(output[idx_val], labels[idx_val], attention[idx_val], args.lam)
     r2_val = sklearn.metrics.r2_score(labels[idx_val].cpu(), output[idx_val].cpu().detach().numpy())
-    l0_norm_att_val = torch.norm(attention[idx_val], 0) / len(idx_val)
+    l0_norm_att_val = sum(~np.isclose(attention[idx_val][0].cpu().detach().numpy().flatten(), np.zeros((attention.cpu().detach().numpy().shape[1])), atol=0.0015))
 
     print('Epoch: {:04d}'.format(epoch+1),
           'loss_train: {:.4f}'.format(loss_train.data.item()),
@@ -124,7 +124,7 @@ def train(epoch):
           'r2_val: {:.4f}'.format(r2_val),
           'l0_norm_att_val: {:.4f}'.format(l0_norm_att_val),       
           'time: {:.4f}s'.format(time.time() - t))
-
+    
     return loss_val.data.item()
 
 def compute_test():
@@ -132,9 +132,9 @@ def compute_test():
     output, attention = model(features, adj)
 
     output = output.reshape(-1)
-    loss_test = loss_fn(output[idx_test], labels[idx_test], attention, 0.25)
+    loss_test = loss_fn(output[idx_test], labels[idx_test], attention, args.lam)
     r2_test = sklearn.metrics.r2_score(labels[idx_test].cpu(), output[idx_test].cpu().detach().numpy())
-    l0_norm_att_test = torch.norm(attention[idx_test], 0) / len(idx_test)
+    l0_norm_att_test = sum(~np.isclose(attention[idx_test][0].cpu().detach().numpy().flatten(), np.zeros((attention.cpu().detach().numpy().shape[1])), atol=0.0015))
 
     print("Test set results:",
           "loss= {:.4f}".format(loss_test.data.item()),
@@ -150,7 +150,7 @@ best_epoch = 0
 for epoch in range(args.epochs):
     loss_values.append(train(epoch))
 
-    torch.save(model.state_dict(), '{}.syn.pkl'.format(epoch))
+    torch.save(model.state_dict(), filedir+'/{}.pkl'.format(epoch))
     if loss_values[-1] < best:
         best = loss_values[-1]
         best_epoch = epoch
@@ -161,24 +161,27 @@ for epoch in range(args.epochs):
     if bad_counter == args.patience:
         break
 
-    files = glob.glob('*.syn.pkl')
+    files = glob.glob(filedir+'/*.pkl')
     for file in files:
-        epoch_nb = int(file.split('.')[0])
+        epoch_nb = int(file.split('/')[2][:-4])
         if epoch_nb < best_epoch:
             os.remove(file)
 
-files = glob.glob('*.syn.pkl')
+files = glob.glob(filedir+'/*.pkl')
 for file in files:
-    epoch_nb = int(file.split('.')[0])
+    epoch_nb = int(file.split('/')[2][:-4])
     if epoch_nb > best_epoch:
         os.remove(file)
 
-print("Optimization Finished!")
 print("Total time elapsed: {:.4f}s".format(time.time() - t_total))
 
 # Restore best model
 print('Loading {}th epoch'.format(best_epoch))
-model.load_state_dict(torch.load('{}.syn.pkl'.format(best_epoch)))
+model.load_state_dict(torch.load(filedir+'/{}.pkl'.format(best_epoch)))
 
 # Testing
 compute_test()
+np.save(filedir + "/idx_test_synthetic", idx_test.cpu().detach().numpy())
+np.save(filedir + "/idx_train_synthetic", idx_train.cpu().detach().numpy())
+np.save(filedir + "/idx_val_synthetic", idx_val.cpu().detach().numpy())
+np.save(filedir + "/neighbor_genes_synthetic", neighbor_genes) 

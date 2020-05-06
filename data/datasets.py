@@ -21,7 +21,7 @@ class SyntheticDataset(Dataset):
 
     def load_data(self):
         # Load expression file, samples as rows and genes/label names as columns
-        separators = {'.tsv' : '\t', '.txt': '\t', '.csv': ','}
+        separators = {'.tsv' : '\t', '.txt': ' ', '.csv': ','}
         sep = data.utils.get_file_separator(self.expr_path)
         self.df = pd.read_csv(self.expr_path, sep=sep, index_col=0, header=None).T
         self.labeldf = pd.read_csv(self.label_path, sep=sep, index_col=0, header=None).T

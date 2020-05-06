@@ -16,6 +16,7 @@ class GAT(nn.Module):
         x = F.dropout(x, self.dropout, training=self.training)
         return (self.out_att(x, adj))
 
+## TODO: implement sparse implementation and GAT_mulithead. Currently only running original GAT model
 class GAT_multihead(nn.Module):
     def __init__(self, ncells, ngenes, nfeat, nhid, nclass, dropout, alpha, nheads):
         """Dense version of GAT."""
